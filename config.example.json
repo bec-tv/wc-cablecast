@@ -1,0 +1,10 @@
+{
+  "wordpressUrl": "http://example.org",
+  "wordrpessPort": "80",
+  "server": "https://cablecast.example.org",
+  "location": 1,
+  "slackWebhook": "https://hooks.slack.com/services/XXX/XXX/XXX",
+  "since": "1900-01-01T00:00:00",
+  "syncIndex": 0,
+  "numSync": 100
+}

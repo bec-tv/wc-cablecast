@@ -5,6 +5,8 @@ const WooCommerceRestApi = require('@woocommerce/woocommerce-rest-api').default;
 let config = {
   wordpressUrl: 'http://localhost',
   wordpressPort: '8080',
+  consumerKey: '',
+  comsumerSecret: '',
   server: 'https://cablecast.bectv.org',
   location: 22,
   since: '1900-01-01T00:00:00',
@@ -24,8 +26,9 @@ async function writeConfig() {
 const wc = new WooCommerceRestApi({
   url: config.wordpressUrl,
   port: config.wordpressPort,
-  consumerKey: 'ck_fb009f23ba0d6f36b90275a02990e6c9fd288308',
-  consumerSecret: 'cs_b1b1d2c489163f26d9b4217d07b8e4a8ea42f961',
+  consumerKey: config.consumerKey,
+  consumerSecret: config.consumerSecret,
+  wpAPIPrefix: config.wpAPIPrefix,
   version: 'wc/v3',
 });
 
@@ -198,7 +201,18 @@ async function syncShows() {
     log(`Syncing show: (${show.id}) ${show.title}`);
 
     let isNew = false;
-    let product = (await wc.get('products', { slug: show.id.toString() })).data[0];
+    const products = (await wc.get('products', { sku: show.id.toString() })).data;
+    let product = products[0];
+    if (products.length > 1) {
+      for (const prod of products) {
+        if (prod.slug === show.id.toString()) {
+          product = prod;
+        } else {
+          await wc.delete(`products/${prod.id}`);
+        }
+      }
+    }
+
     if (!product) {
       isNew = true;
       product = {
@@ -210,6 +224,7 @@ async function syncShows() {
     product.name = show.cgTitle;
     product.slug = show.id.toString();
     product.sku = show.id.toString();
+    product.date_created_gmt = show.eventDate;
 
     if (isNew) {
       product.attributes = [{
@@ -242,7 +257,7 @@ async function syncShows() {
       const thumbnail = showsPayload.webFiles.find((x) => x.id === show.showThumbnailOriginal);
 
       if (thumbnail) {
-        const mediaReq = await fetch(`${config.wordpressUrl}:${config.wordpressPort}/wp-json/wp/v2/media?search=${thumbnail.name}`);
+        const mediaReq = await fetch(`${config.wordpressUrl}:${config.wordpressPort}/${config.wpAPIPrefix}/wp/v2/media?search=${thumbnail.name}`);
         const media = await mediaReq.json();
 
         if (media.length) {
@@ -371,9 +386,17 @@ async function syncShows() {
       }
     }
 
-    await wc.post(`products/${product.id}/variations/batch`, { update: variationUpdates });
+    try {
+      await wc.post(`products/${product.id}/variations/batch`, { update: variationUpdates });
+    } catch (err) {
+      console.log(err.response.data);
+    }
 
-    await wc.post(`products/${product.id}`, product);
+    try {
+      await wc.post(`products/${product.id}`, product);
+    } catch (err) {
+      console.log(err.response.data);
+    }
 
     config.syncIndex += 1;
     if (config.syncIndex >= searchResult.savedShowSearch.results.length
